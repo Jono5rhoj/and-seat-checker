@@ -18,7 +18,10 @@ RUN apt-get update && apt-get install -y \
     && apt-get update \
     && apt-get install -y google-chrome-stable \
     && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    # Verify Chrome binary exists
+    && which google-chrome || echo "Chrome binary not found!" \
+    && google-chrome --version || echo "Chrome installation failed!"
 
 # Set working directory
 WORKDIR /app

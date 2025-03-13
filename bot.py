@@ -32,11 +32,17 @@ last_found_seats = set()
 
 # Setup Chrome WebDriver (headless mode)
 chrome_options = Options()
+chrome_options.binary_location = "/usr/bin/google-chrome"  # Explicitly set the binary location
 chrome_options.add_argument("--headless")
 chrome_options.add_argument("--no-sandbox")
 chrome_options.add_argument("--disable-dev-shm-usage")
 
-driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=chrome_options)
+try:
+    driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=chrome_options)
+    logger.info("Chrome WebDriver initialized successfully.")
+except Exception as e:
+    logger.error(f"Failed to initialize Chrome WebDriver: {e}")
+    raise
 
 def check_seat_availability():
     global last_found_seats
@@ -97,7 +103,7 @@ def main():
     try:
         while True:
             check_seat_availability()
-            random_interval = random.randint(1800, 3600)
+            random_interval = random.randint(1800, 3600)  # 30-60 minutes
             logger.info(f"Waiting for {random_interval // 60} minutes before next check...")
             time.sleep(random_interval)
     except KeyboardInterrupt:
