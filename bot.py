@@ -36,25 +36,26 @@ chrome_options.add_argument("--headless")
 chrome_options.add_argument("--no-sandbox")
 chrome_options.add_argument("--disable-dev-shm-usage")
 
-# Dynamically locate Chrome binary
-possible_chrome_paths = [
-    "/usr/bin/google-chrome",
-    "/usr/bin/google-chrome-stable",
-    "/usr/lib/chromium-browser/chrome",
-    "/usr/lib/chromium/chromium",
-]
-chrome_binary = None
-for path in possible_chrome_paths:
-    if os.path.exists(path):
-        chrome_binary = path
-        break
+# Get Chrome binary path from environment variable or search common locations
+chrome_binary = os.getenv("CHROME_BINARY_PATH")
+if not chrome_binary or not os.path.exists(chrome_binary):
+    possible_chrome_paths = [
+        "/usr/bin/google-chrome",
+        "/usr/bin/google-chrome-stable",
+        "/usr/lib/chromium-browser/chrome",
+        "/usr/lib/chromium/chromium",
+        "/opt/google/chrome/chrome",
+    ]
+    for path in possible_chrome_paths:
+        if os.path.exists(path):
+            chrome_binary = path
+            break
+    if not chrome_binary:
+        logger.error("No Chrome binary found in expected paths or CHROME_BINARY_PATH!")
+        raise FileNotFoundError("Chrome binary not found in any known location.")
 
-if chrome_binary:
-    chrome_options.binary_location = chrome_binary
-    logger.info(f"Found Chrome binary at: {chrome_binary}")
-else:
-    logger.error("No Chrome binary found in expected paths!")
-    raise FileNotFoundError("Chrome binary not found in any known location.")
+chrome_options.binary_location = chrome_binary
+logger.info(f"Using Chrome binary at: {chrome_binary}")
 
 try:
     driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=chrome_options)
