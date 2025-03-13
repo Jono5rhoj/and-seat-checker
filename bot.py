@@ -1,22 +1,20 @@
+import os
 import random
 import time
-import os
+import logging
 import requests
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
 from webdriver_manager.chrome import ChromeDriverManager
 
-# Function to install Chrome and ChromeDriver
-def install_chrome():
-    os.system("wget -q -O /tmp/chrome.deb https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb")
-    os.system("sudo dpkg -i /tmp/chrome.deb || sudo apt-get -f install -y")
-    os.system("sudo apt-get install -y google-chrome-stable")
-
-# Install Chrome before running Selenium
-install_chrome()
+# Setup logging
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(message)s")
+logger = logging.getLogger()
 
 # Load environment variables
 BOOKING_REFERENCE = os.getenv("BOOKING_REFERENCE")
@@ -29,9 +27,11 @@ FLIGHT_URL = os.getenv("FLIGHT_URL")
 # Preferred seats to check
 PREFERRED_SEATS = ["23A", "24A", "25A", "26A", "27A", "28A", "23K", "24K", "25K", "26K", "27K", "28K"]
 
+# Track last found seats
+last_found_seats = set()
+
 # Setup Chrome WebDriver (headless mode)
 chrome_options = Options()
-chrome_options.binary_location = "/usr/bin/google-chrome"  # Ensure Chrome path is correct
 chrome_options.add_argument("--headless")
 chrome_options.add_argument("--no-sandbox")
 chrome_options.add_argument("--disable-dev-shm-usage")
@@ -39,57 +39,73 @@ chrome_options.add_argument("--disable-dev-shm-usage")
 driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=chrome_options)
 
 def check_seat_availability():
-    print("Checking Air NZ seat availability...")
-    driver.get("https://flightbookings.airnewzealand.co.nz/vmanage/actions/managebookingstart")
+    global last_found_seats
+    logger.info("Checking Air NZ seat availability...")
     
-    # Enter booking reference
-    driver.find_element(By.NAME, "pnr").send_keys(BOOKING_REFERENCE)
+    try:
+        driver.get("https://flightbookings.airnewzealand.co.nz/vmanage/actions/managebookingstart")
+        driver.find_element(By.NAME, "pnr").send_keys(BOOKING_REFERENCE)
+        driver.find_element(By.NAME, "surname").send_keys(LAST_NAME, Keys.RETURN)
+        WebDriverWait(driver, 10).until(EC.url_changes(driver.current_url))
+        
+        driver.get(FLIGHT_URL)
+        available_seats = WebDriverWait(driver, 10).until(
+            EC.presence_of_all_elements_located((By.CLASS_NAME, "bui-SeatSelectSeat--available"))
+        )
+    except Exception as e:
+        logger.error(f"Error during page navigation or loading: {e}")
+        return
     
-    # Enter last name
-    driver.find_element(By.NAME, "surname").send_keys(LAST_NAME, Keys.RETURN)
-    
-    # Wait and navigate to seat selection
-    time.sleep(5)
-    driver.get(FLIGHT_URL)
-    time.sleep(5)
-    
-    # Find available seats
-    available_seats = driver.find_elements(By.CLASS_NAME, "bui-SeatSelectSeat--available")
     found_seats = []
-    
     for seat in available_seats:
-        seat_number = seat.find_element(By.CLASS_NAME, "bui-SeatSelectSeat__seatnumber").text.strip()
-        if seat_number in PREFERRED_SEATS:
-            found_seats.append(seat_number)
+        try:
+            seat_number = seat.find_element(By.CLASS_NAME, "bui-SeatSelectSeat__seatnumber").text.strip()
+            if seat_number in PREFERRED_SEATS:
+                found_seats.append(seat_number)
+        except Exception:
+            continue
     
-    if found_seats:
-        print(f"Available seats: {', '.join(found_seats)}")
-        send_sms_notification(found_seats)
+    current_seats = set(found_seats)
+    if current_seats != last_found_seats:
+        if found_seats:
+            logger.info(f"Available seats: {', '.join(found_seats)}")
+            send_sms_notification(found_seats)
+        else:
+            logger.info("No preferred seats available.")
+        last_found_seats = current_seats
     else:
-        print("No preferred seats available.")
-    
+        logger.info("No change in seat availability.")
+
 def send_sms_notification(seats):
     message = f"Air NZ Seat Alert: Available seats on AKL -> LAX! {', '.join(seats)}. Book now!"
-    
     payload = {
-        "phone": GHL_PHONE_1,
         "message": message,
         "api_key": GHL_API_KEY
     }
+    
+    for phone in [GHL_PHONE_1, GHL_PHONE_2]:
+        try:
+            payload["phone"] = phone
+            response = requests.post("https://api.yourgohighlevel.com/send_sms", json=payload, timeout=10)
+            logger.info(f"SMS Response for {phone}: {response.status_code} - {response.text}")
+        except Exception as e:
+            logger.error(f"Failed to send SMS to {phone}: {e}")
+    
+    logger.info("SMS notification attempted!")
 
-    response1 = requests.post("https://api.yourgohighlevel.com/send_sms", json=payload)
-    print(f"SMS Response for {GHL_PHONE_1}: {response1.status_code} - {response1.text}")
+def main():
+    try:
+        while True:
+            check_seat_availability()
+            random_interval = random.randint(1800, 3600)
+            logger.info(f"Waiting for {random_interval // 60} minutes before next check...")
+            time.sleep(random_interval)
+    except KeyboardInterrupt:
+        logger.info("Bot stopped manually.")
+    except Exception as e:
+        logger.error(f"Bot crashed: {e}")
+    finally:
+        driver.quit()
 
-    payload["phone"] = GHL_PHONE_2
-    response2 = requests.post("https://api.yourgohighlevel.com/send_sms", json=payload)
-    print(f"SMS Response for {GHL_PHONE_2}: {response2.status_code} - {response2.text}")
-
-    print("SMS notification attempted!")
-
-# Main loop with random wait time
-while True:
-    check_seat_availability()
-
-    random_interval = random.randint(1800, 3600)  # Random wait time between 30 to 60 minutes
-    print(f"Waiting for {random_interval // 60} minutes before next check...")
-    time.sleep(random_interval)
+if __name__ == "__main__":
+    main()
