@@ -32,10 +32,29 @@ last_found_seats = set()
 
 # Setup Chrome WebDriver (headless mode)
 chrome_options = Options()
-chrome_options.binary_location = "/usr/bin/google-chrome"  # Explicitly set the binary location
 chrome_options.add_argument("--headless")
 chrome_options.add_argument("--no-sandbox")
 chrome_options.add_argument("--disable-dev-shm-usage")
+
+# Dynamically locate Chrome binary
+possible_chrome_paths = [
+    "/usr/bin/google-chrome",
+    "/usr/bin/google-chrome-stable",
+    "/usr/lib/chromium-browser/chrome",
+    "/usr/lib/chromium/chromium",
+]
+chrome_binary = None
+for path in possible_chrome_paths:
+    if os.path.exists(path):
+        chrome_binary = path
+        break
+
+if chrome_binary:
+    chrome_options.binary_location = chrome_binary
+    logger.info(f"Found Chrome binary at: {chrome_binary}")
+else:
+    logger.error("No Chrome binary found in expected paths!")
+    raise FileNotFoundError("Chrome binary not found in any known location.")
 
 try:
     driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=chrome_options)
@@ -84,10 +103,7 @@ def check_seat_availability():
 
 def send_sms_notification(seats):
     message = f"Air NZ Seat Alert: Available seats on AKL -> LAX! {', '.join(seats)}. Book now!"
-    payload = {
-        "message": message,
-        "api_key": GHL_API_KEY
-    }
+    payload = {"message": message, "api_key": GHL_API_KEY}
     
     for phone in [GHL_PHONE_1, GHL_PHONE_2]:
         try:

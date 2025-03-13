@@ -17,11 +17,11 @@ RUN apt-get update && apt-get install -y \
     && echo "deb http://dl.google.com/linux/chrome/deb/ stable main" >> /etc/apt/sources.list.d/google-chrome.list \
     && apt-get update \
     && apt-get install -y google-chrome-stable \
+    # Debug: Check Chrome binary location and version
+    && ls -lh /usr/bin/google-chrome* || echo "Chrome binary not found in /usr/bin!" \
+    && google-chrome --version || echo "Chrome not executable!" \
     && apt-get clean \
-    && rm -rf /var/lib/apt/lists/* \
-    # Verify Chrome binary exists
-    && which google-chrome || echo "Chrome binary not found!" \
-    && google-chrome --version || echo "Chrome installation failed!"
+    && rm -rf /var/lib/apt/lists/*
 
 # Set working directory
 WORKDIR /app
