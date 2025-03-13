@@ -9,6 +9,15 @@ from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.chrome.options import Options
 from webdriver_manager.chrome import ChromeDriverManager
 
+# Function to install Chrome and ChromeDriver
+def install_chrome():
+    os.system("wget -q -O /tmp/chrome.deb https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb")
+    os.system("sudo dpkg -i /tmp/chrome.deb || sudo apt-get -f install -y")
+    os.system("sudo apt-get install -y google-chrome-stable")
+
+# Install Chrome before running Selenium
+install_chrome()
+
 # Load environment variables
 BOOKING_REFERENCE = os.getenv("BOOKING_REFERENCE")
 LAST_NAME = os.getenv("LAST_NAME")
@@ -22,8 +31,8 @@ PREFERRED_SEATS = ["23A", "24A", "25A", "26A", "27A", "28A", "23K", "24K", "25K"
 
 # Setup Chrome WebDriver (headless mode)
 chrome_options = Options()
+chrome_options.binary_location = "/usr/bin/google-chrome"  # Ensure Chrome path is correct
 chrome_options.add_argument("--headless")
-chrome_options.add_argument("--disable-gpu")
 chrome_options.add_argument("--no-sandbox")
 chrome_options.add_argument("--disable-dev-shm-usage")
 
